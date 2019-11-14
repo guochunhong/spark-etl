@@ -649,14 +649,30 @@ object PGTool extends java.io.Serializable with LazyLogging {
     spark.sql(sqlQuery)
   }
 
+  def tableEmpty(spark: SparkSession, url: String, table: String, password: String): Boolean = {
+    val query = s"""select 1 from "$table" limit 1 """
+    sqlExecWithResult(spark, url, query, password).count == 0
+  }
+
+  def loadEmptyTable(spark: SparkSession, url: String, table: String, candidate: Dataset[Row], path: String, partitions: Int, password: String): Boolean = {
+    if (tableEmpty(spark, url, table, password)) {
+      outputBulkCsv(spark, url, table, candidate, path, partitions, password, true)
+      logger.warn("Loading directly data")
+      return true
+    }
+    false
+  }
+
   def outputBulkDfScd1Hash(spark: SparkSession
                            , url: String
                            , table: String
                            , candidate: Dataset[Row]
                            , key: List[String]
-                           , partitions: Int = 8
+                           , partitions: Int = 4
                            , path: String
                            , password: String = ""): Unit = {
+    if (loadEmptyTable(spark, url, table, candidate, path, partitions, password))
+      return
     val insertTmp = getTmpTable("ins_")
     val updateTmp = getTmpTable("upd_")
     try {
@@ -765,6 +781,8 @@ object PGTool extends java.io.Serializable with LazyLogging {
                            , path: String
                            , password: String = ""
                           ): Unit = {
+    if (loadEmptyTable(spark, url, table, candidate, path, partitions, password))
+      return
     val insertTmp = getTmpTable("ins_")
     val updateTmp = getTmpTable("upd_")
     try {
