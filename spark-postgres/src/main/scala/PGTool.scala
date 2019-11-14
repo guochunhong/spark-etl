@@ -2,18 +2,16 @@ package io.frama.parisni.spark.postgres
 
 import java.sql.{Connection, DriverManager, PreparedStatement, ResultSetMetaData}
 import java.util.Properties
-
-import com.typesafe.scalalogging.LazyLogging
-import org.apache.spark.sql.{DataFrame, Dataset, Row, SparkSession}
-import org.apache.spark.sql.functions.{col, expr}
 import java.util.UUID.randomUUID
 
-import io.frama.parisni.spark.dataframe.DFTool
+import com.typesafe.scalalogging.LazyLogging
 import org.apache.hadoop.conf.Configuration
 import org.apache.hadoop.fs.{FileSystem, Path}
 import org.apache.spark.Partitioner
 import org.apache.spark.rdd.RDD
+import org.apache.spark.sql.functions.{col, expr}
 import org.apache.spark.sql.types._
+import org.apache.spark.sql.{DataFrame, Dataset, Row, SparkSession}
 import org.postgresql.copy.{CopyManager, PGCopyInputStream}
 import org.postgresql.core.BaseConnection
 
@@ -796,7 +794,7 @@ object PGTool extends java.io.Serializable with LazyLogging {
   def outputBulkDfScd2Hash(spark: SparkSession
                            , url: String
                            , table: String
-                           , df: DataFrame
+                           , candidate: DataFrame
                            , pk: String
                            , key: List[String]
                            , endDatetimeCol: String
@@ -805,7 +803,6 @@ object PGTool extends java.io.Serializable with LazyLogging {
                            , path: String
                            , password: String = ""
                           ): Unit = {
-    val candidate = DFTool.dfAddHash(df)
     val insertTmp = getTmpTable("ins_")
     val updateTmp = getTmpTable("upd_")
     try {
@@ -815,7 +812,7 @@ object PGTool extends java.io.Serializable with LazyLogging {
 
       // 2.1 produce insert and update
       val joinCol = key.map(x => s"""f.`$x` = c.`$x`""").mkString(" AND ")
-      val insert = DFTool.dfAddHash(candidate).as("c").join(fetch1.as("f"), expr(joinCol + "AND c.hash = f.hash"), "left_anti")
+      val insert = candidate.as("c").join(fetch1.as("f"), expr(joinCol + "AND c.hash = f.hash"), "left_anti")
 
       // 2.2 produce insert and update
       val update = fetch1.as("f").join(candidate.as("c"), expr(joinCol + "AND c.hash != f.hash"), "left_semi").select(col(pk))
